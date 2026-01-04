@@ -25,7 +25,7 @@ SELECT * FROM CUSTOMER_DETAILS;
 --===================================
 
 -- login snowsql
-snowsql
+-- snowsql -a <snowflake-identifier> -u <username>
 
 -- Create pipe format
 CREATE OR REPLACE FILE FORMAT PIPE_FORMAT_CLI
@@ -33,7 +33,7 @@ CREATE OR REPLACE FILE FORMAT PIPE_FORMAT_CLI
 	field_delimiter = '|'
 	skip_header = 1;
 	
--- Create a stage table
+-- Create a stage
 CREATE OR REPLACE STAGE PIP_CLI_STAGE
 	file_format = PIP_FORMAT_CLI;	
 
@@ -46,7 +46,7 @@ file://C:\Users\QasimHassan\Downloads\snowflake_project\Data\customer_detail.csv
 list @PIP_CLI_STAGE;
 
 -- Resume warehouse, in case the auto-resume feature is OFF
-ALTER WAREHOUSE <name> RESUME;
+-- ALTER WAREHOUSE <name> RESUME;
 
 -- copy data from stage to table
 COPY INTO CUSTOMER_DETAILS
@@ -81,8 +81,8 @@ SELECT * FROM TESLA_STOCKS;
 
 -- external stage creation
 CREATE OR REPLACE STAGE BULK_COPY_TESLA_STOCKS
-URL = "s3://snowflake-demo-qh/TSLA.csv"
-CREDENTIALS = (AWS_KEY_ID='<access_key>', AWS_SECRET_KEY='<secret_key>');
+URL = "s3://snowflake-loading-smit/TSLA.csv"
+CREDENTIALS = (AWS_KEY_ID='', AWS_SECRET_KEY='');
 
 -- list stage
 LIST @BULK_COPY_TESLA_STOCKS;
@@ -109,9 +109,9 @@ USE ROLE SYSADMIN;
 CREATE OR REPLACE STORAGE INTEGRATION S3_INTEGRATION
   TYPE = EXTERNAL_STAGE
   STORAGE_PROVIDER = 'S3'
-  STORAGE_AWS_ROLE_ARN = '<role arn>'
+  STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::767398088866:role/snowflake-s3-role'
   ENABLED = TRUE
-  STORAGE_ALLOWED_LOCATIONS = ('<bucket-prefix URL>');
+  STORAGE_ALLOWED_LOCATIONS = ('s3://snowflake-loading-smit/TSLA.csv');
 
 -- giving privileges
 USE ROLE ACCOUNTADMIN;
@@ -121,10 +121,11 @@ USE ROLE SYSADMIN;
 -- valdating integration
 DESC INTEGRATION S3_INTEGRATION;
 
+-- s3-url = s3://snowflake-demo-um/input/
 -- creating stage
 CREATE OR REPLACE STAGE S3_INTEGRATEION_BULK_COPY_TESLA_STOCKS
   STORAGE_INTEGRATION = S3_INTEGRATION
-  URL = '<bucket-prefix URL>/TSLA.csv'
+  URL = 's3://snowflake-loading-smit/TSLA.csv'
   FILE_FORMAT = (TYPE = 'CSV', FIELD_DELIMITER=',', SKIP_HEADER=1);
 
 -- validating integration
@@ -167,8 +168,8 @@ CREATE OR REPLACE STORAGE INTEGRATION S3_TESLA_INTEGRATION
   TYPE = EXTERNAL_STAGE
   STORAGE_PROVIDER = 'S3'
   ENABLED = TRUE
-  STORAGE_AWS_ROLE_ARN = '<role-arn>'
-  STORAGE_ALLOWED_LOCATIONS = ('s3://snowflake-demo-qh/input/');
+  STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::767398088866:role/snowflake-s3-role'
+  STORAGE_ALLOWED_LOCATIONS = ('s3://snowflake-loading-smit/TSLA.csv');
 
 -- Step 4: Retrieve the AWS IAM User for your Snowflake Account
 DESC INTEGRATION S3_TESLA_INTEGRATION;
@@ -186,7 +187,7 @@ CREATE OR REPLACE FILE FORMAT S3_TESLA_STAGE_FORMAT
 -- Step 6: Create an external stage using file format createbavove
 CREATE STAGE S3_TESLA_STAGE
   STORAGE_INTEGRATION = S3_TESLA_INTEGRATION
-  URL = 's3://snowflake-demo-qh/input/'
+  URL = 's3://snowflake-loading-smit/TSLA.csv'
   FILE_FORMAT = S3_TESLA_STAGE_FORMAT;
 
 -- Step 7: Create a COPY Into Command
@@ -199,7 +200,9 @@ SELECT * FROM TESLA_STOCKS;
 TRUNCATE TABLE TESLA_STOCKS;
 
 --  Creating Pipe 
-CREATE OR REPLACE PIPE S3_TESLA_PIPE AUTO_INGEST=TRUE AS
+CREATE OR REPLACE PIPE S3_TESLA_PIPE
+AUTO_INGEST=TRUE
+AS
 COPY INTO TESLA_STOCKS FROM @S3_TESLA_STAGE;
 
 -- Configure cloud event / call snow pipe rest API (S3_TESLA_EVENT_NOTICTATION)
@@ -207,6 +210,7 @@ SHOW PIPES;
 
 -- Data should be there auotmatically
 SELECT * FROM TESLA_STOCKS;
+select count(*) from tesla_stocks;
 
 -- DROPPING PIPE
 DROP PIPE S3_TESLA_PIPE;
@@ -220,9 +224,3 @@ SELECT * FROM TESLA_STOCKS order by DATE desc;
 -- dropping & getting back the table (time travel)
 DROP TABLE TESLA_STOCKS;
 UNDROP TABLE TESLA_STOCKS;
-
--- updating values
-UPDATE TESLA_STOCKS SET OPEN_VALUE=200 WHERE DATE = '2022-08-01';
-
--- getting data beofre last upodate query
-SELECT * FROM TESLA_STOCKS BEFORE (statement => '01b73059-0002-f530-0000-fc77000146da') ORDER BY DATE DESC;
